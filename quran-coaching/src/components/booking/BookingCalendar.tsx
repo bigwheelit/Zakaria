@@ -9,7 +9,7 @@ export function BookingCalendar() {
     const { availability } = useAvailability()
     const { createBooking, bookings, canBookMore } = useBookings()
     const [selectedDate, setSelectedDate] = useState<Date | null>(null)
-    const [selected Slot, setSelectedSlot] = useState<{
+    const [selectedSlot, setSelectedSlot] = useState<{
         start: Date
         end: Date
         meetingLink: string | null
@@ -150,10 +150,10 @@ export function BookingCalendar() {
                             onClick={() => setSelectedDate(date)}
                             disabled={!hasAvailability || !canBookMore}
                             className={`p-4 rounded-lg border-2 transition-all ${isSelected
-                                    ? 'border-primary-500 bg-primary-50'
-                                    : hasAvailability && canBookMore
-                                        ? 'border-gray-200 hover:border-primary-300 hover:bg-gray-50'
-                                        : 'border-gray-100 bg-gray-50 opacity-50 cursor-not-allowed'
+                                ? 'border-primary-500 bg-primary-50'
+                                : hasAvailability && canBookMore
+                                    ? 'border-gray-200 hover:border-primary-300 hover:bg-gray-50'
+                                    : 'border-gray-100 bg-gray-50 opacity-50 cursor-not-allowed'
                                 }`}
                         >
                             <div className="text-sm text-gray-600">{format(date, 'EEE')}</div>
@@ -179,8 +179,8 @@ export function BookingCalendar() {
                                     key={index}
                                     onClick={() => setSelectedSlot(slot)}
                                     className={`p-3 rounded-lg border-2 transition-all ${selectedSlot === slot
-                                            ? 'border-primary-500 bg-primary-50'
-                                            : 'border-gray-200 hover:border-primary-300'
+                                        ? 'border-primary-500 bg-primary-50'
+                                        : 'border-gray-200 hover:border-primary-300'
                                         }`}
                                 >
                                     <div className="font-medium">{format(slot.start, 'h:mm a')}</div>
