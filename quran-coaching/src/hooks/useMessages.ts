@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { Database } from '../types/database.types'
@@ -23,9 +23,9 @@ export function useMessages(studentId?: string) {
     const [messages, setMessages] = useState<MessageWithSender[]>([])
     const [conversations, setConversations] = useState<Conversation[]>([])
     const [loading, setLoading] = useState(true)
-    const [channel, setChannel] = useState<RealtimeChannel | null>(null)
+    // Use a ref so the cleanup function always sees the current channel
+    const channelRef = useRef<RealtimeChannel | null>(null)
 
-    // Fetch messages for a specific conversation
     useEffect(() => {
         if (!user) {
             setLoading(false)
@@ -33,24 +33,23 @@ export function useMessages(studentId?: string) {
         }
 
         if (profile?.role === 'tutor' && !studentId) {
-            // Tutor viewing inbox - fetch conversations
             fetchConversations()
         } else if (profile?.role === 'tutor' && studentId) {
-            // Tutor viewing specific conversation
             fetchMessages(studentId)
             subscribeToMessages(studentId)
         } else if (profile?.role === 'student') {
-            // Student viewing their conversation with tutor
             fetchMessages()
             subscribeToMessages()
         }
 
         return () => {
-            if (channel) {
-                supabase.removeChannel(channel)
+            if (channelRef.current) {
+                supabase.removeChannel(channelRef.current)
+                channelRef.current = null
             }
         }
-    }, [user, profile, studentId])
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.id, profile?.role, studentId])
 
     const fetchMessages = async (otherUserId?: string) => {
         if (!user) return
@@ -84,7 +83,6 @@ export function useMessages(studentId?: string) {
         if (!user || profile?.role !== 'tutor') return
 
         try {
-            // Get all unique student conversations
             const { data: allMessages, error } = await supabase
                 .from('messages')
                 .select('student_id, student_profile:profiles!messages_student_id_fkey(name), body, created_at, read_at, sender_id')
@@ -93,7 +91,6 @@ export function useMessages(studentId?: string) {
 
             if (error) throw error
 
-            // Group by student_id to get conversations
             const conversationMap = new Map<string, Conversation>()
 
             allMessages?.forEach((msg: any) => {
@@ -107,7 +104,6 @@ export function useMessages(studentId?: string) {
                     })
                 }
 
-                // Count unread messages (messages from student that tutor hasn't read)
                 if (!msg.read_at && msg.sender_id === msg.student_id) {
                     const conv = conversationMap.get(msg.student_id)!
                     conv.unread_count++
@@ -125,8 +121,13 @@ export function useMessages(studentId?: string) {
     const subscribeToMessages = (otherUserId?: string) => {
         if (!user) return
 
+        // Remove any existing channel before creating a new one
+        if (channelRef.current) {
+            supabase.removeChannel(channelRef.current)
+        }
+
         const newChannel = supabase
-            .channel('messages')
+            .channel(`messages-${user.id}-${otherUserId ?? 'self'}`)
             .on(
                 'postgres_changes',
                 {
@@ -140,7 +141,6 @@ export function useMessages(studentId?: string) {
                             : undefined,
                 },
                 () => {
-                    // Refetch messages on any change
                     if (profile?.role === 'tutor' && !otherUserId) {
                         fetchConversations()
                     } else {
@@ -150,7 +150,7 @@ export function useMessages(studentId?: string) {
             )
             .subscribe()
 
-        setChannel(newChannel)
+        channelRef.current = newChannel
     }
 
     const sendMessage = async (body: string, recipientId?: string) => {
@@ -160,7 +160,6 @@ export function useMessages(studentId?: string) {
         let studentId: string
 
         if (profile.role === 'student') {
-            // Find tutor ID - for now, get first tutor from profiles
             const { data: tutorData } = await supabase
                 .from('profiles')
                 .select('id')
@@ -173,7 +172,6 @@ export function useMessages(studentId?: string) {
             tutorId = tutorData.id
             studentId = user.id
         } else {
-            // Tutor sending to student
             if (!recipientId) throw new Error('Recipient ID required for tutor')
             tutorId = user.id
             studentId = recipientId
@@ -186,7 +184,7 @@ export function useMessages(studentId?: string) {
                 student_id: studentId,
                 sender_id: user.id,
                 body,
-            })
+            } as Database['public']['Tables']['messages']['Insert'])
             .select()
             .single()
 
@@ -197,7 +195,7 @@ export function useMessages(studentId?: string) {
     const markAsRead = async (messageId: string) => {
         const { data, error } = await supabase
             .from('messages')
-            .update({ read_at: new Date().toISOString() })
+            .update({ read_at: new Date().toISOString() } as Database['public']['Tables']['messages']['Update'])
             .eq('id', messageId)
             .select()
             .single()
@@ -211,7 +209,7 @@ export function useMessages(studentId?: string) {
 
         const { error } = await supabase
             .from('messages')
-            .update({ read_at: new Date().toISOString() })
+            .update({ read_at: new Date().toISOString() } as Database['public']['Tables']['messages']['Update'])
             .eq(profile?.role === 'tutor' ? 'tutor_id' : 'student_id', user.id)
             .eq(profile?.role === 'tutor' ? 'student_id' : 'tutor_id', otherUserId)
             .is('read_at', null)

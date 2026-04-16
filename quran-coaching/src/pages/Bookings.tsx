@@ -1,11 +1,13 @@
+import { useState } from 'react'
 import { useBookings } from '../hooks/useBookings'
 import { BookingCalendar } from '../components/booking/BookingCalendar'
 import { BookingCard } from '../components/booking/BookingCard'
-import { useState } from 'react'
+import { RescheduleModal } from '../components/booking/RescheduleModal'
 
 export function Bookings() {
-    const { bookings, cancelBooking, completedCount, maxSessions } = useBookings()
+    const { bookings, cancelBooking, rescheduleBooking, completedCount, maxSessions } = useBookings()
     const [activeTab, setActiveTab] = useState<'new' | 'upcoming' | 'past'>('new')
+    const [reschedulingId, setReschedulingId] = useState<string | null>(null)
 
     const upcomingBookings = bookings.filter(
         (b) => b.status === 'booked' && new Date(b.start_ts) > new Date()
@@ -14,6 +16,10 @@ export function Bookings() {
     const pastBookings = bookings.filter(
         (b) => b.status !== 'booked' || new Date(b.start_ts) <= new Date()
     )
+
+    const reschedulingBooking = reschedulingId
+        ? bookings.find(b => b.id === reschedulingId) ?? null
+        : null
 
     return (
         <div className="section-padding">
@@ -27,33 +33,23 @@ export function Bookings() {
 
                 {/* Tabs */}
                 <div className="flex gap-2 mb-6 border-b border-gray-200">
-                    <button
-                        onClick={() => setActiveTab('new')}
-                        className={`pb-3 px-4 font-medium transition-colors ${activeTab === 'new'
-                                ? 'border-b-2 border-primary-500 text-primary-600'
-                                : 'text-gray-600 hover:text-gray-900'
+                    {(['new', 'upcoming', 'past'] as const).map((tab) => (
+                        <button
+                            key={tab}
+                            onClick={() => setActiveTab(tab)}
+                            className={`pb-3 px-4 font-medium transition-colors capitalize ${
+                                activeTab === tab
+                                    ? 'border-b-2 border-primary-500 text-primary-600'
+                                    : 'text-gray-600 hover:text-gray-900'
                             }`}
-                    >
-                        Book New Session
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('upcoming')}
-                        className={`pb-3 px-4 font-medium transition-colors ${activeTab === 'upcoming'
-                                ? 'border-b-2 border-primary-500 text-primary-600'
-                                : 'text-gray-600 hover:text-gray-900'
-                            }`}
-                    >
-                        Upcoming ({upcomingBookings.length})
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('past')}
-                        className={`pb-3 px-4 font-medium transition-colors ${activeTab === 'past'
-                                ? 'border-b-2 border-primary-500 text-primary-600'
-                                : 'text-gray-600 hover:text-gray-900'
-                            }`}
-                    >
-                        Past Sessions
-                    </button>
+                        >
+                            {tab === 'new'
+                                ? 'Book New Session'
+                                : tab === 'upcoming'
+                                    ? `Upcoming (${upcomingBookings.length})`
+                                    : 'Past Sessions'}
+                        </button>
+                    ))}
                 </div>
 
                 {/* Content */}
@@ -76,6 +72,7 @@ export function Bookings() {
                                     key={booking.id}
                                     booking={booking}
                                     onCancel={cancelBooking}
+                                    onReschedule={(id) => setReschedulingId(id)}
                                 />
                             ))
                         )}
@@ -96,6 +93,16 @@ export function Bookings() {
                     </div>
                 )}
             </div>
+
+            {/* Reschedule Modal */}
+            {reschedulingBooking && (
+                <RescheduleModal
+                    bookingId={reschedulingBooking.id}
+                    currentStart={reschedulingBooking.start_ts}
+                    onClose={() => setReschedulingId(null)}
+                    onReschedule={rescheduleBooking}
+                />
+            )}
         </div>
     )
 }

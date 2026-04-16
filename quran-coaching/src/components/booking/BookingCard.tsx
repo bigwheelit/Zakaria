@@ -5,7 +5,7 @@ type Booking = Database['public']['Tables']['bookings']['Row']
 
 interface BookingCardProps {
     booking: Booking & {
-        student_profile?: { name: string }
+        student_profile?: { name: string; whatsapp?: string | null }
         tutor_profile?: { name: string }
     }
     onCancel?: (id: string) => void
@@ -15,6 +15,8 @@ interface BookingCardProps {
     isTutor?: boolean
 }
 
+const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000
+
 export function BookingCard({
     booking,
     onCancel,
@@ -23,10 +25,16 @@ export function BookingCard({
     onMarkNoShow,
     isTutor,
 }: BookingCardProps) {
-    const isPast = new Date(booking.start_ts) < new Date()
-    const canModify = !isPast && booking.status === 'booked'
+    const sessionStart = new Date(booking.start_ts)
+    const now = new Date()
+    const isPast = sessionStart < now
+    const isBooked = booking.status === 'booked'
+    const hoursUntilSession = (sessionStart.getTime() - now.getTime()) / (1000 * 60 * 60)
+    // Students can only modify if > 24 hours away and session is upcoming
+    const withinNoticeWindow = sessionStart.getTime() - now.getTime() < TWENTY_FOUR_HOURS_MS
+    const canModify = !isPast && isBooked && !withinNoticeWindow
 
-    const statusColors = {
+    const statusColors: Record<Booking['status'], string> = {
         booked: 'badge-info',
         completed: 'badge-success',
         canceled: 'badge-error',
@@ -68,7 +76,24 @@ export function BookingCard({
                 <p className="text-sm text-gray-600 mb-4">{booking.notes}</p>
             )}
 
+            {/* 24-hour notice warning for upcoming bookings inside window */}
+            {!isTutor && isBooked && !isPast && withinNoticeWindow && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs px-3 py-2 rounded-lg mb-3">
+                    ⏰ This session is within 24 hours and can no longer be modified.
+                </div>
+            )}
+
+            {/* Time remaining for upcoming bookings */}
+            {!isPast && isBooked && !withinNoticeWindow && (
+                <p className="text-xs text-gray-400 mb-3">
+                    {hoursUntilSession > 48
+                        ? `${Math.floor(hoursUntilSession / 24)} days away`
+                        : `${Math.floor(hoursUntilSession)}h away`}
+                </p>
+            )}
+
             <div className="flex gap-2 flex-wrap">
+                {/* Student actions */}
                 {!isTutor && canModify && onReschedule && (
                     <button
                         onClick={() => onReschedule(booking.id)}
@@ -85,7 +110,9 @@ export function BookingCard({
                         Cancel
                     </button>
                 )}
-                {isTutor && booking.status === 'booked' && onMarkCompleted && (
+
+                {/* Tutor actions */}
+                {isTutor && isBooked && onMarkCompleted && (
                     <button
                         onClick={() => onMarkCompleted(booking.id)}
                         className="btn-primary text-sm"
@@ -93,7 +120,7 @@ export function BookingCard({
                         Mark Completed
                     </button>
                 )}
-                {isTutor && booking.status === 'booked' && onMarkNoShow && (
+                {isTutor && isBooked && onMarkNoShow && (
                     <button
                         onClick={() => onMarkNoShow(booking.id)}
                         className="btn-ghost text-sm"

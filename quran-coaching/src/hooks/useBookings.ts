@@ -20,11 +20,15 @@ export function useBookings() {
     useEffect(() => {
         if (user) {
             fetchBookings()
-            fetchCompletedCount()
+            // Only call when profile has resolved and role is known
+            if (profile?.role === 'student') {
+                fetchCompletedCount()
+            }
         } else {
             setLoading(false)
         }
-    }, [user])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.id, profile?.role])
 
     const fetchBookings = async () => {
         if (!user) return
@@ -53,10 +57,10 @@ export function useBookings() {
 
         try {
             const { data, error } = await supabase
-                .rpc('get_completed_sessions_count', { student_uuid: user.id })
+                .rpc('get_completed_sessions_count', { student_uuid: user.id } as never)
 
             if (error) throw error
-            setCompletedCount(data || 0)
+            setCompletedCount((data as number) || 0)
         } catch (error) {
             console.error('Error fetching completed count:', error)
         }
@@ -79,7 +83,7 @@ export function useBookings() {
                 end_ts: endTs.toISOString(),
                 meeting_link: meetingLink,
                 status: 'booked',
-            })
+            } as Database['public']['Tables']['bookings']['Insert'])
             .select()
             .single()
 
@@ -92,7 +96,7 @@ export function useBookings() {
     const updateBooking = async (bookingId: string, updates: Partial<Booking>) => {
         const { data, error } = await supabase
             .from('bookings')
-            .update(updates)
+            .update(updates as Database['public']['Tables']['bookings']['Update'])
             .eq('id', bookingId)
             .select()
             .single()
@@ -166,7 +170,7 @@ export function useAvailability() {
     const createAvailabilityRule = async (rule: Omit<AvailabilityRule, 'id' | 'created_at' | 'updated_at'>) => {
         const { data, error } = await supabase
             .from('availability_rules')
-            .insert(rule)
+            .insert(rule as Database['public']['Tables']['availability_rules']['Insert'])
             .select()
             .single()
 
@@ -178,7 +182,7 @@ export function useAvailability() {
     const updateAvailabilityRule = async (id: string, updates: Partial<AvailabilityRule>) => {
         const { data, error } = await supabase
             .from('availability_rules')
-            .update(updates)
+            .update(updates as Database['public']['Tables']['availability_rules']['Update'])
             .eq('id', id)
             .select()
             .single()
@@ -191,7 +195,7 @@ export function useAvailability() {
     const deleteAvailabilityRule = async (id: string) => {
         const { error } = await supabase
             .from('availability_rules')
-            .update({ active: false })
+            .update({ active: false } as Database['public']['Tables']['availability_rules']['Update'])
             .eq('id', id)
 
         if (error) throw error
